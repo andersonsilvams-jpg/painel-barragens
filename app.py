@@ -203,7 +203,9 @@ with st.sidebar:
     uf_escolhida = st.selectbox("UF", UFS, index=UFS.index("MS"))
     st.link_button("Painel de barragens da ANM", URL_PAINEL_ANM)
     st.header("Dados")
-    upload = st.file_uploader("Barragens.csv (opcional, se o download falhar)", type=["csv"])
+    st.caption("O painel baixa e processa o arquivo da ANM sozinho. Se falhar, baixe pelo link e envie abaixo.")
+    st.link_button("⬇️ Baixar Barragens.csv (ANM)", URL_SIGBM)
+    upload = st.file_uploader("Enviar Barragens.csv", type=["csv"])
     if st.button("🔄 Recarregar da ANM"):
         baixar_sigbm.clear()
 
