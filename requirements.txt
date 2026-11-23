@@ -4,3 +4,4 @@ requests
 openpyxl
 folium
 streamlit-folium
+truststore>=0.9

@@ -10,10 +10,11 @@ from datetime import datetime
 
 import folium
 import pandas as pd
-import requests
 import streamlit as st
 from folium.plugins import MarkerCluster
 from streamlit_folium import st_folium
+
+from net_utils import baixar
 
 URL_SNISB = "https://www.snirh.gov.br/arcgis/rest/services/IG/SNISB/FeatureServer/0/query"
 URL_PORTAL = "https://www.snisb.gov.br/portal-snisb/consultar-barragem"
@@ -57,8 +58,7 @@ def baixar_snisb(uf: str) -> tuple[pd.DataFrame, str]:
             "resultRecordCount": 2000,
             "f": "json",
         }
-        r = requests.get(URL_SNISB, params=params, headers={"User-Agent": "Mozilla/5.0"}, timeout=90)
-        r.raise_for_status()
+        r, _ = baixar(URL_SNISB, params=params, timeout=90)
         js = r.json()
         if "error" in js:
             raise RuntimeError(js["error"].get("message", js["error"]))

@@ -12,12 +12,14 @@ from datetime import datetime
 
 import folium
 import pandas as pd
-import requests
 import streamlit as st
 from streamlit_folium import st_folium
 
+from net_utils import baixar
+
 URL_SIGBM = "https://dadosabertos.anm.gov.br/SIGBM/Barragens.csv"
 URL_SIGBM_PUBLICO = "https://app.anm.gov.br/SIGBM/Publico"
+URL_PAINEL_ANM = "https://geo.anm.gov.br/portal/apps/dashboards/4a9d32d667b14b5ba23f66b3ecc88a65"
 
 st.set_page_config(page_title="Fiscalização de Barragens — CREA-MS", page_icon="🏗️", layout="wide")
 
@@ -106,10 +108,9 @@ def ler_csv(conteudo: bytes) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=60 * 60 * 12, show_spinner="Baixando Barragens.csv da ANM...")
-def baixar_sigbm() -> tuple[bytes, str]:
-    r = requests.get(URL_SIGBM, headers={"User-Agent": "Mozilla/5.0"}, timeout=60)
-    r.raise_for_status()
-    return r.content, datetime.now().strftime("%d/%m/%Y %H:%M")
+def baixar_sigbm() -> tuple[bytes, str, bool]:
+    r, inseguro = baixar(URL_SIGBM, timeout=120)
+    return r.content, datetime.now().strftime("%d/%m/%Y %H:%M"), inseguro
 
 
 def preparar(bruto: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
@@ -197,6 +198,10 @@ st.title("🏗️ Fiscalização de Barragens de Mineração")
 st.caption("CREA-MS · Fonte: ANM — SIGBM (dados abertos)")
 
 with st.sidebar:
+    UFS = ["Todas", "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "MT", "PA", "PB",
+           "PE", "PI", "PR", "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO"]
+    uf_escolhida = st.selectbox("UF", UFS, index=UFS.index("MS"))
+    st.link_button("Painel de barragens da ANM", URL_PAINEL_ANM)
     st.header("Dados")
     upload = st.file_uploader("Barragens.csv (opcional, se o download falhar)", type=["csv"])
     if st.button("🔄 Recarregar da ANM"):
@@ -207,8 +212,8 @@ try:
     if upload is not None:
         conteudo, origem = upload.getvalue(), f"arquivo enviado ({upload.name})"
     else:
-        conteudo, quando = baixar_sigbm()
-        origem = f"ANM, baixado em {quando}"
+        conteudo, quando, inseguro = baixar_sigbm()
+        origem = f"ANM, baixado em {quando}" + (" (certificado do site da ANM não verificado)" if inseguro else "")
     bruto = ler_csv(conteudo)
 except Exception as e:  # noqa: BLE001
     st.error(
@@ -226,9 +231,7 @@ if faltando:
 # ---------------------------------------------------------------------------
 with st.sidebar:
     st.header("Filtros")
-    ufs = sorted(u for u in df["uf"].unique() if u)
-    uf_sel = st.multiselect("UF", ufs, default=["MS"] if "MS" in ufs else [])
-    base = df[df["uf"].isin(uf_sel)] if uf_sel else df
+    base = df if uf_escolhida == "Todas" else df[df["uf"] == uf_escolhida]
 
     def ms(rotulo, col):
         opcoes = sorted(v for v in base[col].unique() if v)
@@ -245,6 +248,10 @@ with st.sidebar:
 
     st.header("Cruzamento com o Crea")
     arq_crea = st.file_uploader("Planilha de ARTs/registros (CSV ou Excel)", type=["csv", "xlsx", "xls"])
+
+if base.empty:
+    st.info(f"Nenhuma barragem de mineração cadastrada no SIGBM para {uf_escolhida}.")
+    st.stop()
 
 f = base.copy()
 for col, sel in [("municipio", mun_sel), ("empreendedor", emp_sel), ("dpa", dpa_sel), ("cri", cri_sel),
@@ -287,7 +294,7 @@ f = f.sort_values(["prioridade", "nome"], ascending=[False, True])
 # ---------------------------------------------------------------------------
 # Indicadores
 # ---------------------------------------------------------------------------
-st.caption(f"Origem dos dados: {origem} · {len(df)} barragens no arquivo")
+st.caption(f"Origem dos dados: {origem} · {len(base)} barragens em {uf_escolhida} · {len(df)} no Brasil")
 
 k = st.columns(6)
 k[0].metric("Barragens", len(f))
@@ -367,6 +374,7 @@ with aba_ficha:
             if "art_crea" in r:
                 st.write(f"**Crea:** {r['art_crea']}")
             st.link_button("Abrir SIGBM Público", URL_SIGBM_PUBLICO)
+            st.link_button("Painel de barragens da ANM", URL_PAINEL_ANM)
         with b2:
             rts = {c.replace("RT · ", ""): r[c] for c in f.columns if c.startswith("RT · ") and r[c]}
             st.markdown("**Responsável técnico declarado no SIGBM**")
