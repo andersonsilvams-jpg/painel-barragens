@@ -226,7 +226,25 @@ COLS = {
     "ORG_NM_ORGANIZACAO": "Fiscalizador", "FASE_DE_VIDA": "Fase de vida", "AUT_NU_AUTORIZACAO": "Outorga/licença",
     "BARRAGEM_AUTUADA": "Autuada", "COMPLETUDE": "Completude cadastro", "BAR_CD_SNISB": "Código SNISB",
 }
+# Nomes amigáveis para as demais colunas do SNISB
+COLS_EXTRAS = {
+    "BAR_NM_SECUNDARIO": "Nome secundário", "BAR_CD_BAR_ENT_FISCALIZADORA": "Código no fiscalizador",
+    "BAR_NU_ALT_MAX_BASE_FUNDACAO": "Altura da fundação (m)", "BAR_DT_CADASTRO": "Data de cadastro",
+    "TIPO_MATERIAL": "Material", "USO_COMPLEMENTAR": "Uso complementar", "BAR_DS_CLASSE": "Classe",
+    "BAR_NU_LATITUDE": "Latitude", "BAR_NU_LONGITUDE": "Longitude", "NIVEL_PERIGO": "Nível de perigo",
+    "IC_REGULADA": "Regulada", "ING_SG_UFMUNICIPIO": "UF", "AUT_DT_EMISSAO_PUB": "Data da outorga/licença",
+    "ECL_IC_EXISTE_ECLUSA": "Eclusa", "ING_NM_BACIADNAEE": "Bacia", "ING_NM_REGIAO_HIDRO": "Região hidrográfica",
+    "ING_CD_CURSODAGUA_TRECHO": "Código do trecho", "ING_NM_TRECHO": "Curso d'água",
+    "DOMINIO_CURSO_DAGUA": "Domínio do curso d'água", "ING_NM_COMITEFEDERAL": "Comitê federal",
+    "ING_NM_COMITEESTADUAL": "Comitê estadual", "UNIDADE_DE_GESTAO": "Unidade de gestão",
+    "DANO_POTENCIAL": "DPA (original)", "CATEGORIA_RISCO": "CRI (original)", "OBJECTID": "OBJECTID",
+}
 cols = [c for c in COLS if c in f.columns]
+cols_todas = cols + ["mapa"] + [c for c in f.columns if c not in cols and c != "mapa"]
+NOMES = {**COLS, **COLS_EXTRAS, "mapa": "Ver no mapa"}
+f = f.copy()
+f["mapa"] = [f"https://www.google.com/maps?q={la},{lo}" if pd.notna(la) and pd.notna(lo) else ""
+             for la, lo in zip(f.get("BAR_NU_LATITUDE", pd.Series(index=f.index)), f.get("BAR_NU_LONGITUDE", pd.Series(index=f.index)))]
 
 with aba_mapa:
     pts = f.dropna(subset=["BAR_NU_LATITUDE", "BAR_NU_LONGITUDE"])
@@ -252,8 +270,12 @@ with aba_mapa:
                    + (" Mostrando as 3.000 primeiras por prioridade." if len(pts) > 3000 else ""))
 
 with aba_tab:
-    tab = f[cols].rename(columns=COLS)
-    st.dataframe(tab, width="stretch", hide_index=True, height=500)
+    todas = st.toggle("Mostrar todas as colunas do SNISB", value=True)
+    tab = f[cols_todas if todas else cols + ["mapa"]].rename(columns=NOMES)
+    st.dataframe(tab, width="stretch", hide_index=True, height=500,
+                 column_config={"Ver no mapa": st.column_config.LinkColumn("Ver no mapa", display_text="abrir")})
+    st.caption(f"{len(tab)} barragens · {tab.shape[1]} colunas. O download sai sempre com todas as colunas e os filtros aplicados.")
+    tab = f[cols_todas].rename(columns=NOMES)
     c1, c2 = st.columns(2)
     buf = io.BytesIO()
     tab.to_excel(buf, index=False)
